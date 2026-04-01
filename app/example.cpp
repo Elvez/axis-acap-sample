@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 
   syslog(LOG_INFO, "Creating VDO image provider and creating stream %d x %d",
           width, height);
-  provider = createImgProvider(width, height, 2, VDO_FORMAT_RGB);
+  provider = createImgProvider(width, height, 2, VDO_FORMAT_RGBA);
   if (!provider) {
     syslog(LOG_ERR, "%s: Failed to create ImgProvider", __func__);
     exit(2);
@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
 
   // Create OpenCV Mats for the camera frame (nv12), the converted frame (bgr)
   // and the foreground frame that is outputted by the background subtractor
-  Mat bgr_mat = Mat(height, width, CV_8UC3);
+  Mat bgra_mat = Mat(height, width, CV_8UC4);
   // Mat nv12_mat = Mat(height * 3 / 2, width, CV_8UC1);
   Mat fg;
 
@@ -80,15 +80,15 @@ int main(int argc, char* argv[]) {
     // Assign the VDO image buffer to the nv12_mat OpenCV Mat.
     // This specific Mat is used as it is the one we created for NV12,
     // which has a different layout than e.g., BGR.
-    bgr_mat.data = static_cast<uint8_t*>(vdo_buffer_get_data(buf));
+    bgra_mat.data = static_cast<uint8_t*>(vdo_buffer_get_data(buf));
 
     // Convert the NV12 data to BGR
-    // cvtColor(bgr_mat, bgr_mat, COLOR_, 3);
+    // cvtColor(bgra_mat, bgra_mat, COLOR_, 3);
 
     // Perform background subtraction on the bgr image with
     // learning rate 0.005. The resulting image should have
     // pixel intensities > 0 only where changes have occurred
-    bgsub->apply(bgr_mat, fg, 0.005);
+    bgsub->apply(bgra_mat, fg, 0.005);
 
     // Filter noise from the image with the filtering element
     morphologyEx(fg, fg, MORPH_OPEN, kernel);
