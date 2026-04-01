@@ -32,19 +32,19 @@ int main(int argc, char* argv[]) {
   unsigned int width = 1024;
   unsigned int height = 576;
 
-  // chooseStreamResolution gets the least resource intensive stream
-  // that exceeds or equals the desired resolution specified above
-  unsigned int streamWidth = 0;
-  unsigned int streamHeight = 0;
-  if (!chooseStreamResolution(width, height, &streamWidth,
-                              &streamHeight)) {
-      syslog(LOG_ERR, "%s: Failed choosing stream resolution", __func__);
-      exit(1);
-  }
+  // // chooseStreamResolution gets the least resource intensive stream
+  // // that exceeds or equals the desired resolution specified above
+  // unsigned int streamWidth = 0;
+  // unsigned int streamHeight = 0;
+  // if (!chooseStreamResolution(width, height, &streamWidth,
+  //                             &streamHeight)) {
+  //     syslog(LOG_ERR, "%s: Failed choosing stream resolution", __func__);
+  //     exit(1);
+  // }
 
   syslog(LOG_INFO, "Creating VDO image provider and creating stream %d x %d",
-          streamWidth, streamHeight);
-  provider = createImgProvider(streamWidth, streamHeight, 2, VDO_FORMAT_YUV);
+          width, height);
+  provider = createImgProvider(width, height, 2, VDO_FORMAT_YUV);
   if (!provider) {
     syslog(LOG_ERR, "%s: Failed to create ImgProvider", __func__);
     exit(2);

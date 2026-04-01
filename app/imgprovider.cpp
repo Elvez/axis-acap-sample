@@ -28,7 +28,7 @@
 
 #include "vdo-map.h"
 
-#define VDO_CHANNEL (1)
+#define VDO_CHANNEL (0)
 
 /**
  * brief Set up a stream through VDO.
