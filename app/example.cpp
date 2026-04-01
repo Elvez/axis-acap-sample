@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
 
   syslog(LOG_INFO, "Creating VDO image provider and creating stream %d x %d",
           width, height);
-  provider = createImgProvider(width, height, 2, VDO_FORMAT_YUV);
+  provider = createImgProvider(width, height, 2, VDO_FORMAT_RGB);
   if (!provider) {
     syslog(LOG_ERR, "%s: Failed to create ImgProvider", __func__);
     exit(2);
@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
   // Create OpenCV Mats for the camera frame (nv12), the converted frame (bgr)
   // and the foreground frame that is outputted by the background subtractor
   Mat bgr_mat = Mat(height, width, CV_8UC3);
-  Mat nv12_mat = Mat(height * 3 / 2, width, CV_8UC1);
+  // Mat nv12_mat = Mat(height * 3 / 2, width, CV_8UC1);
   Mat fg;
 
   while (true) {
@@ -80,10 +80,10 @@ int main(int argc, char* argv[]) {
     // Assign the VDO image buffer to the nv12_mat OpenCV Mat.
     // This specific Mat is used as it is the one we created for NV12,
     // which has a different layout than e.g., BGR.
-    nv12_mat.data = static_cast<uint8_t*>(vdo_buffer_get_data(buf));
+    bgr_mat.data = static_cast<uint8_t*>(vdo_buffer_get_data(buf));
 
     // Convert the NV12 data to BGR
-    cvtColor(nv12_mat, bgr_mat, COLOR_YUV2BGR_NV12, 3);
+    // cvtColor(bgr_mat, bgr_mat, COLOR_, 3);
 
     // Perform background subtraction on the bgr image with
     // learning rate 0.005. The resulting image should have
