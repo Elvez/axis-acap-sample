@@ -1,5 +1,5 @@
 # Application Name
-TARGET := genea_video_integration
+TARGET := opencv_app
 
 OBJECTS := example.cpp
 
