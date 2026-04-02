@@ -13,7 +13,7 @@ int main() {
     openlog("opencv_app", LOG_PID | LOG_CONS, LOG_USER);
 
     GError* error = NULL;
-    auto streams = vdo_stream_get_all(error);
+    auto streams = vdo_stream_get_all(&error);
     if (error)
     {
       syslog(LOG_ERR, "Failed to get all streams: %s",
