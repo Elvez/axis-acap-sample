@@ -59,8 +59,6 @@ int main() {
         {"VDO_FORMAT_IVS", VDO_FORMAT_IVS},
         {"VDO_FORMAT_RAW", VDO_FORMAT_RAW},
         {"VDO_FORMAT_RGBA", VDO_FORMAT_RGBA},
-        {"VDO_FORMAT_RGB", VDO_FORMAT_RGB},
-        {"VDO_FORMAT_PLANAR_RGB", VDO_FORMAT_PLANAR_RGB},
     };
 
     VdoStream* stream = NULL;
