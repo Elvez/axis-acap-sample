@@ -22,20 +22,26 @@ int main() {
 
     GError* error = NULL;
 
-    GList* streams = vdo_stream_get_all(&error);
-    if (error) {
-        syslog(LOG_ERR, "Failed to get all streams: %s",
+    // Create an in-process stream attached to the VDO control socket so
+    // we can allocate and enqueue buffers explicitly. This avoids the
+    // "Not attached to control socket" error when calling
+    // `vdo_stream_buffer_alloc()` on externally-owned streams.
+    VdoMap* vdoMap = vdo_map_new();
+    vdo_map_set_uint32(vdoMap, "channel", 0);
+    vdo_map_set_uint32(vdoMap, "width", 640);
+    vdo_map_set_uint32(vdoMap, "height", 480);
+    vdo_map_set_uint32(vdoMap, "buffer.strategy", VDO_BUFFER_STRATEGY_EXPLICIT);
+
+    VdoStream* stream = vdo_stream_new(vdoMap, NULL, &error);
+    if (!stream) {
+        syslog(LOG_ERR, "Failed to create attached vdo stream: %s",
                error ? error->message : "unknown");
         g_clear_error(&error);
+        g_object_unref(vdoMap);
         return EXIT_FAILURE;
     }
-    if (!streams) {
-        syslog(LOG_ERR, "No VDO streams available");
-        return EXIT_FAILURE;
-    }
-
-    VdoStream* stream = (VdoStream*)g_list_first(streams)->data;
-    syslog(LOG_INFO, "Got streams : %d", g_list_length(streams));
+    g_object_unref(vdoMap);
+    syslog(LOG_INFO, "Created attached VDO stream successfully");
 
     // Allocate and enqueue a few buffers BEFORE starting the stream.
     VdoBuffer* bufs[NUM_VDO_BUFFERS] = {0};
