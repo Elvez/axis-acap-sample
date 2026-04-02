@@ -153,6 +153,45 @@ int main() {
     }
 
     // Fetch a few frames
+    if (!attached) {
+        // Try to attach to the datapath of the existing stream so we can
+        // receive buffers. Use a short socket timeout to avoid blocking.
+        GError* attach_err = NULL;
+        VdoMap* intent = vdo_map_new();
+        vdo_map_set_uint32(intent, "socket.timeout_ms", 1000);
+        if (vdo_stream_attach(stream, intent, &attach_err)) {
+            syslog(LOG_INFO, "Successfully attached to existing stream datapath");
+            attached = true;
+        } else {
+            syslog(LOG_WARNING, "Failed to attach to stream datapath: %s",
+                   attach_err ? attach_err->message : "unknown");
+            g_clear_error(&attach_err);
+
+            // Try a snapshot fallback (one-off frame) before giving up.
+            VdoMap* snapMap = vdo_map_new();
+            vdo_map_set_uint32(snapMap, "channel", 0);
+            GError* snap_err = NULL;
+            VdoBuffer* snapBuf = vdo_stream_snapshot(snapMap, &snap_err);
+            if (snapBuf) {
+                syslog(LOG_INFO, "Received one snapshot frame as fallback");
+                // Attempt to release snapshot buffer. Best-effort only.
+                vdo_stream_buffer_unref(stream, &snapBuf, NULL);
+                g_object_unref(snapMap);
+                g_object_unref(intent);
+                // We got a frame; exit successfully.
+                return EXIT_SUCCESS;
+            } else {
+                syslog(LOG_ERR, "Snapshot fallback failed: %s",
+                       snap_err ? snap_err->message : "unknown");
+                g_clear_error(&snap_err);
+                g_object_unref(snapMap);
+                g_object_unref(intent);
+                return EXIT_FAILURE;
+            }
+        }
+        g_object_unref(intent);
+    }
+
     for (int i = 0; i < 10; i++) {
         VdoBuffer* buffer = vdo_stream_get_buffer(stream, &error);
         if (!buffer) {
