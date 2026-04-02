@@ -14,8 +14,43 @@
 #include <glib.h>
 #include <syslog.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
 
 #define NUM_VDO_BUFFERS 3
+
+static char* capture_vdo_map_dump(VdoMap* map) {
+    if (!map) return NULL;
+
+    char *buf = NULL;
+    size_t len = 0;
+    FILE *mem = open_memstream(&buf, &len);
+    if (!mem) return NULL;
+
+    int saved_stdout = dup(STDOUT_FILENO);
+    if (saved_stdout == -1) {
+        fclose(mem);
+        return NULL;
+    }
+
+    fflush(stdout);
+    if (dup2(fileno(mem), STDOUT_FILENO) == -1) {
+        close(saved_stdout);
+        fclose(mem);
+        return NULL;
+    }
+
+    // This writes into the memstream instead of real stdout
+    vdo_map_dump(map);
+
+    fflush(mem);
+    // restore stdout
+    dup2(saved_stdout, STDOUT_FILENO);
+    close(saved_stdout);
+    fclose(mem);
+
+    return buf; // caller must free()
+}
 
 int main() {
     openlog("opencv_app", LOG_PID | LOG_CONS, LOG_USER);
