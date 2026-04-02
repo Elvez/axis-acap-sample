@@ -34,17 +34,15 @@ int main() {
             VdoStream* s = (VdoStream*)l->data;
             syslog(LOG_INFO, "Dumping stream object %p", s);
 
-            // Try to obtain a VdoMap for the stream and dump it. The exact
-            // API varies between SDK versions; this attempts the common
-            // signature used by ACAP examples.
+            // Obtain stream info/settings as a VdoMap and dump it. Use
+            // `vdo_stream_get_info()` which is available in this SDK.
             GError* map_err = NULL;
-            VdoMap* map = NULL;
-            map = vdo_stream_get_map(s, NULL, &map_err);
+            VdoMap* map = vdo_stream_get_info(s, &map_err);
             if (map) {
                 vdo_map_dump(map);
                 g_object_unref(map);
             } else {
-                syslog(LOG_INFO, "  Could not get stream map: %s",
+                syslog(LOG_INFO, "  Could not get stream info: %s",
                        map_err ? map_err->message : "unknown");
                 g_clear_error(&map_err);
             }
