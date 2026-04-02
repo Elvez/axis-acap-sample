@@ -1,4 +1,3 @@
-
 /**
  * Minimal VDO stream example (ACAP / Axis OS 9.x compatible)
  */
@@ -6,7 +5,7 @@
 #include <vdo-stream.h>
 #include <vdo-map.h>
 #include <vdo-buffer.h>
-#include <vdo-frame.h>
+
 #include <stdint.h>
 #include <syslog.h>
 #include <stdlib.h>
@@ -31,13 +30,30 @@ int main() {
     if (!stream) {
         syslog(LOG_ERR, "Failed to create stream: %s",
                error ? error->message : "unknown");
+        g_clear_error(&error);
         return EXIT_FAILURE;
+    }
+
+    // 🔍 Get stream info (resolution etc.)
+    VdoMap* info = vdo_stream_get_info(stream, &error);
+    uint32_t width = 0, height = 0;
+
+    if (info) {
+        width  = vdo_map_get_uint32(info, "width", 0);
+        height = vdo_map_get_uint32(info, "height", 0);
+        syslog(LOG_INFO, "Stream resolution: %ux%u", width, height);
+        g_object_unref(info);
+    } else {
+        syslog(LOG_ERR, "Failed to get stream info: %s",
+               error ? error->message : "unknown");
+        g_clear_error(&error);
     }
 
     // 3. Start stream
     if (!vdo_stream_start(stream, &error)) {
         syslog(LOG_ERR, "Failed to start stream: %s",
                error ? error->message : "unknown");
+        g_clear_error(&error);
         return EXIT_FAILURE;
     }
 
@@ -51,22 +67,21 @@ int main() {
         if (!buffer) {
             syslog(LOG_ERR, "Failed to get buffer: %s",
                    error ? error->message : "unknown");
+            g_clear_error(&error);
             break;
         }
 
-        VdoFrame* frame = vdo_buffer_get_frame(buffer);
+        // 👉 Old API: only reliable thing is buffer size
+        size_t size = vdo_buffer_get_size(buffer);
 
-        uint32_t format = vdo_frame_get_format(frame);
-        uint32_t width  = vdo_frame_get_width(frame);
-        uint32_t height = vdo_frame_get_height(frame);
-
-        syslog(LOG_INFO, "Frame %d: format=%u, %ux%u",
-               i, format, width, height);
+        syslog(LOG_INFO, "Frame %d: buffer size=%zu (~%ux%u)",
+               i, size, width, height);
 
         // release buffer back to VDO
         if (!vdo_stream_buffer_unref(stream, &buffer, &error)) {
             syslog(LOG_ERR, "Failed to release buffer: %s",
                    error ? error->message : "unknown");
+            g_clear_error(&error);
             break;
         }
     }
