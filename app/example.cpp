@@ -19,38 +19,6 @@
 
 #define NUM_VDO_BUFFERS 3
 
-static char* capture_vdo_map_dump(VdoMap* map) {
-    if (!map) return NULL;
-
-    char *buf = NULL;
-    size_t len = 0;
-    FILE *mem = open_memstream(&buf, &len);
-    if (!mem) return NULL;
-
-    int saved_stdout = dup(STDOUT_FILENO);
-    if (saved_stdout == -1) {
-        fclose(mem);
-        return NULL;
-    }
-
-    fflush(stdout);
-    if (dup2(fileno(mem), STDOUT_FILENO) == -1) {
-        close(saved_stdout);
-        fclose(mem);
-        return NULL;
-    }
-
-    // This writes into the memstream instead of real stdout
-    vdo_map_dump(map);
-
-    fflush(mem);
-    // restore stdout
-    dup2(saved_stdout, STDOUT_FILENO);
-    close(saved_stdout);
-    fclose(mem);
-
-    return buf; // caller must free()
-}
 
 int main() {
     openlog("opencv_app", LOG_PID | LOG_CONS, LOG_USER);
@@ -71,48 +39,60 @@ int main() {
 
             // Obtain stream info/settings as a VdoMap and dump it. Use
             // `vdo_stream_get_info()` which is available in this SDK.
-            GError* map_err = NULL;
-            VdoMap* map = vdo_stream_get_info(s, &map_err);
-            if (map) {
-                char *dump = capture_vdo_map_dump(map);
-                if (dump) {
-                    syslog(LOG_INFO, "Stream map:\n%s", dump);
-                    free(dump);
-                } else {
-                    syslog(LOG_INFO, "  vdo_map_dump capture failed");
-                }
-                g_object_unref(map);
-            } else {
-                syslog(LOG_INFO, "  Could not get stream info: %s",
-                       map_err ? map_err->message : "unknown");
-                g_clear_error(&map_err);
-            }
+
         }
         g_list_free(discovered_streams);
     } else {
         syslog(LOG_INFO, "No VDO streams discovered from daemon");
     }
 
-    // Create an in-process stream attached to the VDO control socket so
-    // we can allocate and enqueue buffers explicitly. This avoids the
-    // "Not attached to control socket" error when calling
-    // `vdo_stream_buffer_alloc()` on externally-owned streams.
-    VdoMap* vdoMap = vdo_map_new();
-    vdo_map_set_uint32(vdoMap, "channel", 0);
-    vdo_map_set_uint32(vdoMap, "width", 640);
-    vdo_map_set_uint32(vdoMap, "height", 480);
-    vdo_map_set_uint32(vdoMap, "buffer.strategy", VDO_BUFFER_STRATEGY_EXPLICIT);
+    // Try creating an attached stream for each known VDO format and
+    // pick the first format that the device accepts. This helps to
+    // discover which formats/subformats are supported by the camera.
+    struct FormatOption { const char* name; VdoFormat fmt; } options[] = {
+        {"VDO_FORMAT_NONE", VDO_FORMAT_NONE},
+        {"VDO_FORMAT_H264", VDO_FORMAT_H264},
+        {"VDO_FORMAT_H265", VDO_FORMAT_H265},
+        {"VDO_FORMAT_JPEG", VDO_FORMAT_JPEG},
+        {"VDO_FORMAT_YUV", VDO_FORMAT_YUV},
+        {"VDO_FORMAT_BAYER", VDO_FORMAT_BAYER},
+        {"VDO_FORMAT_IVS", VDO_FORMAT_IVS},
+        {"VDO_FORMAT_RAW", VDO_FORMAT_RAW},
+        {"VDO_FORMAT_RGBA", VDO_FORMAT_RGBA},
+        {"VDO_FORMAT_RGB", VDO_FORMAT_RGB},
+        {"VDO_FORMAT_PLANAR_RGB", VDO_FORMAT_PLANAR_RGB},
+    };
 
-    VdoStream* stream = vdo_stream_new(vdoMap, NULL, &error);
+    VdoStream* stream = NULL;
+    for (size_t oi = 0; oi < G_N_ELEMENTS(options); ++oi) {
+        VdoMap* tryMap = vdo_map_new();
+        vdo_map_set_uint32(tryMap, "channel", 0);
+        vdo_map_set_uint32(tryMap, "width", 640);
+        vdo_map_set_uint32(tryMap, "height", 480);
+        vdo_map_set_uint32(tryMap, "buffer.strategy", VDO_BUFFER_STRATEGY_EXPLICIT);
+        vdo_map_set_uint32(tryMap, "format", options[oi].fmt);
+
+        GError* fmt_err = NULL;
+        VdoStream* s = vdo_stream_new(tryMap, NULL, &fmt_err);
+        if (s) {
+            syslog(LOG_INFO, "Created attached stream with format %s",
+                   options[oi].name);
+            stream = s;
+            g_object_unref(tryMap);
+            break;
+        } else {
+            syslog(LOG_INFO, "Format %s rejected: %s",
+                   options[oi].name,
+                   fmt_err ? fmt_err->message : "unknown");
+            g_clear_error(&fmt_err);
+            g_object_unref(tryMap);
+        }
+    }
+
     if (!stream) {
-        syslog(LOG_ERR, "Failed to create attached vdo stream: %s",
-               error ? error->message : "unknown");
-        g_clear_error(&error);
-        g_object_unref(vdoMap);
+        syslog(LOG_ERR, "None of the tested VDO formats could create an attached stream");
         return EXIT_FAILURE;
     }
-    g_object_unref(vdoMap);
-    syslog(LOG_INFO, "Created ced VDO stream successfully");
 
     // Allocate and enqueue a few buffers BEFORE starting the stream.
     VdoBuffer* bufs[NUM_VDO_BUFFERS] = {0};
