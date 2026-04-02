@@ -62,6 +62,7 @@ int main() {
     };
 
     VdoStream* stream = NULL;
+    bool attached = false;
     for (size_t oi = 0; oi < G_N_ELEMENTS(options); ++oi) {
         VdoMap* tryMap = vdo_map_new();
         vdo_map_set_uint32(tryMap, "channel", 0);
@@ -76,6 +77,7 @@ int main() {
             syslog(LOG_INFO, "Created attached stream with format %s",
                    options[oi].name);
             stream = s;
+            attached = true;
             g_object_unref(tryMap);
             break;
         } else {
@@ -88,45 +90,67 @@ int main() {
     }
 
     if (!stream) {
-        syslog(LOG_ERR, "None of the tested VDO formats could create an attached stream");
-        return EXIT_FAILURE;
-    }
+        syslog(LOG_WARNING, "None of the tested VDO formats could create an attached stream; trying to use an existing stream from the daemon");
 
-    // Allocate and enqueue a few buffers BEFORE starting the stream.
-    VdoBuffer* bufs[NUM_VDO_BUFFERS] = {0};
-    for (int i = 0; i < NUM_VDO_BUFFERS; ++i) {
-        bufs[i] = vdo_stream_buffer_alloc(stream, NULL, &error);
-        if (!bufs[i]) {
-            syslog(LOG_ERR, "Failed to allocate vdo buffer: %s",
-                   error ? error->message : "unknown");
-            g_clear_error(&error);
-            // cleanup already allocated buffers
-            for (int j = 0; j < i; ++j) {
-                vdo_stream_buffer_unref(stream, &bufs[j], NULL);
-            }
-            return EXIT_FAILURE;
+        GError* list_err = NULL;
+        GList* existing = vdo_stream_get_all(&list_err);
+        if (list_err) {
+            syslog(LOG_ERR, "Failed to list existing streams: %s",
+                   list_err ? list_err->message : "unknown");
+            g_clear_error(&list_err);
         }
 
-        if (!vdo_stream_buffer_enqueue(stream, bufs[i], &error)) {
-            syslog(LOG_ERR, "Failed to enqueue vdo buffer: %s",
-                   error ? error->message : "unknown");
-            g_clear_error(&error);
-            for (int j = 0; j <= i; ++j) {
-                vdo_stream_buffer_unref(stream, &bufs[j], NULL);
-            }
+        if (existing && existing->data) {
+            stream = (VdoStream*)existing->data;
+            attached = false;
+            syslog(LOG_INFO, "Falling back to existing stream %p", stream);
+            g_list_free(existing);
+        } else {
+            syslog(LOG_ERR, "No existing streams available to fall back to");
+            if (existing) g_list_free(existing);
             return EXIT_FAILURE;
         }
     }
 
-    // Start stream
-    if (!vdo_stream_start(stream, &error)) {
-        syslog(LOG_ERR, "Failed to start stream: %s",
-               error ? error->message : "unknown");
-        g_clear_error(&error);
-        return EXIT_FAILURE;
-    }
+    if (attached) {
+        // Allocate and enqueue a few buffers BEFORE starting the stream.
+        VdoBuffer* bufs[NUM_VDO_BUFFERS] = {0};
+        for (int i = 0; i < NUM_VDO_BUFFERS; ++i) {
+            bufs[i] = vdo_stream_buffer_alloc(stream, NULL, &error);
+            if (!bufs[i]) {
+                syslog(LOG_ERR, "Failed to allocate vdo buffer: %s",
+                       error ? error->message : "unknown");
+                g_clear_error(&error);
+                // cleanup already allocated buffers
+                for (int j = 0; j < i; ++j) {
+                    vdo_stream_buffer_unref(stream, &bufs[j], NULL);
+                }
+                return EXIT_FAILURE;
+            }
 
-    syslog(LOG_INFO, "Stream started successfully");
+            if (!vdo_stream_buffer_enqueue(stream, bufs[i], &error)) {
+                syslog(LOG_ERR, "Failed to enqueue vdo buffer: %s",
+                       error ? error->message : "unknown");
+                g_clear_error(&error);
+                for (int j = 0; j <= i; ++j) {
+                    vdo_stream_buffer_unref(stream, &bufs[j], NULL);
+                }
+                return EXIT_FAILURE;
+            }
+        }
+
+        // Start stream
+        if (!vdo_stream_start(stream, &error)) {
+            syslog(LOG_ERR, "Failed to start stream: %s",
+                   error ? error->message : "unknown");
+            g_clear_error(&error);
+            return EXIT_FAILURE;
+        }
+
+        syslog(LOG_INFO, "Attached stream started successfully");
+    } else {
+        syslog(LOG_INFO, "Using existing device-owned stream; will not allocate buffers or call start()");
+    }
 
     // Fetch a few frames
     for (int i = 0; i < 10; i++) {
