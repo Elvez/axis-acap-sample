@@ -74,7 +74,13 @@ int main() {
             GError* map_err = NULL;
             VdoMap* map = vdo_stream_get_info(s, &map_err);
             if (map) {
-                vdo_map_dump(map);
+                char *dump = capture_vdo_map_dump(map);
+                if (dump) {
+                    syslog(LOG_INFO, "Stream map:\n%s", dump);
+                    free(dump);
+                } else {
+                    syslog(LOG_INFO, "  vdo_map_dump capture failed");
+                }
                 g_object_unref(map);
             } else {
                 syslog(LOG_INFO, "  Could not get stream info: %s",
