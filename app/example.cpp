@@ -10,31 +10,19 @@
 #include <stdlib.h>
 
 int main() {
-    openlog("vdo_minimal", LOG_PID | LOG_CONS, LOG_USER);
+    openlog("opencv_app", LOG_PID | LOG_CONS, LOG_USER);
 
     GError* error = NULL;
-
-    // 1. Create settings
-    VdoMap* settings = vdo_map_new();
-    if (!settings) {
-        syslog(LOG_ERR, "Failed to create settings map");
-        return EXIT_FAILURE;
-    }
-
-    // Only set channel
-    vdo_map_set_uint32(settings, "channel", 1);
-
-    // 2. Create stream
-    VdoStream* stream = vdo_stream_new(settings, NULL, &error);
-    if (!stream) {
-        syslog(LOG_ERR, "Failed to create stream: %s",
+    auto streams = vdo_stream_get_all(error);
+    if (error)
+    {
+      syslog(LOG_ERR, "Failed to get all streams: %s",
                error ? error->message : "unknown");
-        g_clear_error(&error);
-        return EXIT_FAILURE;
     }
+    syslog(LOG_INFO, "Got streams : %d", g_list_length(streams));
 
     // 3. Start stream
-    if (!vdo_stream_start(stream, &error)) {
+    if (!vdo_stream_start(streams[0], &error)) {
         syslog(LOG_ERR, "Failed to start stream: %s",
                error ? error->message : "unknown");
         g_clear_error(&error);
@@ -46,7 +34,7 @@ int main() {
     // 4. Fetch frames
     for (int i = 0; i < 10; i++) {
 
-        VdoBuffer* buffer = vdo_stream_get_buffer(stream, &error);
+        VdoBuffer* buffer = vdo_stream_get_buffer(streams[0], &error);
 
         if (!buffer) {
             syslog(LOG_ERR, "Failed to get buffer: %s",
@@ -59,7 +47,7 @@ int main() {
         syslog(LOG_INFO, "Frame %d received", i);
 
         // release buffer back to VDO
-        if (!vdo_stream_buffer_unref(stream, &buffer, &error)) {
+        if (!vdo_stream_buffer_unref(streams[0], &buffer, &error)) {
             syslog(LOG_ERR, "Failed to release buffer: %s",
                    error ? error->message : "unknown");
             g_clear_error(&error);
