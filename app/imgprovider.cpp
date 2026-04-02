@@ -294,8 +294,8 @@ bool createStream(ImgProvider_t* provider, unsigned int w, unsigned int h) {
     return ret;
     }
 
-    vdo_map_set_uint32(vdoMap, "channel", VDO_CHANNEL);
-    vdo_map_set_uint32(vdoMap, "format", provider->vdoFormat);
+    // vdo_map_set_uint32(vdoMap, "channel", VDO_CHANNEL);
+    // vdo_map_set_uint32(vdoMap, "format", provider->vdoFormat);
     vdo_map_set_uint32(vdoMap, "width", w);
     vdo_map_set_uint32(vdoMap, "height", h);
     // We will use buffer_alloc() and buffer_unref() calls.
