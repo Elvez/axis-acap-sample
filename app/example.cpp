@@ -22,7 +22,7 @@ int main() {
     syslog(LOG_INFO, "Got streams : %d", g_list_length(streams));
 
     // 3. Start stream
-    if (!vdo_stream_start(g_list_first(streams)->data, &error)) {
+    if (!vdo_stream_start((VdoStream*)g_list_first(streams)->data, &error)) {
         syslog(LOG_ERR, "Failed to start stream: %s",
                error ? error->message : "unknown");
         g_clear_error(&error);
@@ -34,7 +34,7 @@ int main() {
     // 4. Fetch frames
     for (int i = 0; i < 10; i++) {
 
-        VdoBuffer* buffer = vdo_stream_get_buffer(g_list_first(streams)->data, &error);
+        VdoBuffer* buffer = vdo_stream_get_buffer((VdoStream*)g_list_first(streams)->data, &error);
 
         if (!buffer) {
             syslog(LOG_ERR, "Failed to get buffer: %s",
@@ -47,7 +47,7 @@ int main() {
         syslog(LOG_INFO, "Frame %d received", i);
 
         // release buffer back to VDO
-        if (!vdo_stream_buffer_unref(g_list_first(streams)->data, &buffer, &error)) {
+        if (!vdo_stream_buffer_unref((VdoStream*)g_list_first(streams)->data, &buffer, &error)) {
             syslog(LOG_ERR, "Failed to release buffer: %s",
                    error ? error->message : "unknown");
             g_clear_error(&error);
