@@ -22,6 +22,38 @@ int main() {
 
     GError* error = NULL;
 
+    // Enumerate and dump any streams provided by the running VDO daemon.
+    GList* discovered_streams = vdo_stream_get_all(&error);
+    if (error) {
+        syslog(LOG_ERR, "Failed to enumerate VDO streams: %s",
+               error ? error->message : "unknown");
+        g_clear_error(&error);
+    } else if (discovered_streams) {
+        syslog(LOG_INFO, "Discovered %d VDO streams", g_list_length(discovered_streams));
+        for (GList* l = discovered_streams; l; l = l->next) {
+            VdoStream* s = (VdoStream*)l->data;
+            syslog(LOG_INFO, "Dumping stream object %p", s);
+
+            // Try to obtain a VdoMap for the stream and dump it. The exact
+            // API varies between SDK versions; this attempts the common
+            // signature used by ACAP examples.
+            GError* map_err = NULL;
+            VdoMap* map = NULL;
+            map = vdo_stream_get_map(s, NULL, &map_err);
+            if (map) {
+                vdo_map_dump(map);
+                g_object_unref(map);
+            } else {
+                syslog(LOG_INFO, "  Could not get stream map: %s",
+                       map_err ? map_err->message : "unknown");
+                g_clear_error(&map_err);
+            }
+        }
+        g_list_free(discovered_streams);
+    } else {
+        syslog(LOG_INFO, "No VDO streams discovered from daemon");
+    }
+
     // Create an in-process stream attached to the VDO control socket so
     // we can allocate and enqueue buffers explicitly. This avoids the
     // "Not attached to control socket" error when calling
@@ -41,7 +73,7 @@ int main() {
         return EXIT_FAILURE;
     }
     g_object_unref(vdoMap);
-    syslog(LOG_INFO, "Created attached VDO stream successfully");
+    syslog(LOG_INFO, "Created ced VDO stream successfully");
 
     // Allocate and enqueue a few buffers BEFORE starting the stream.
     VdoBuffer* bufs[NUM_VDO_BUFFERS] = {0};
